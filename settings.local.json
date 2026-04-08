@@ -1,0 +1,188 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if echo \"$TOOL_INPUT\" | grep -qE \"git\\s+add\\s+(-A|\\.|--all)\"; then echo \"BLOCKED: Never use git add -A, git add ., or git add --all. Stage specific files by path instead.\" >&2; exit 1; fi'",
+            "statusMessage": "Checking git add safety..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if echo \"$TOOL_INPUT\" | grep -qE \"mvn\\s+(compile|test|verify|clean|package|install)(\\s|$)\"; then echo \"BLOCKED: Never run mvn compile/test/verify — user handles these manually.\" >&2; exit 1; fi'",
+            "statusMessage": "Checking mvn command safety..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if echo \"$TOOL_INPUT\" | grep -qiE \"skills\\s+(add|install)\"; then echo \"BLOCKED: Never use \\\"skills add\\\" CLI — it creates symlinks and pollutes the repo with 20+ agent directories. Instead: 1) Download the SKILL.md from the source repo, 2) Copy to .claude/skills/<name>/SKILL.md (project) or ~/.claude/skills/<name>/SKILL.md (global).\" >&2; exit 1; fi'",
+            "statusMessage": "Checking skills CLI usage..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"\\.java$\"; then CONTENT=$(echo \"$TOOL_INPUT\" | jq -r \".content // .new_string // empty\" 2>/dev/null); if echo \"$CONTENT\" | grep -qE \"^import .+\\.\\*;\"; then echo \"BLOCKED: Wildcard imports are not allowed. Use specific imports instead.\" >&2; exit 1; fi; fi; exit 0'",
+            "statusMessage": "Checking for wildcard imports..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"\\.java$\"; then CONTENT=$(echo \"$TOOL_INPUT\" | jq -r \".content // .new_string // empty\" 2>/dev/null); if echo \"$CONTENT\" | grep -q \"@Autowired\"; then echo \"WARNING: @Autowired detected. Use @RequiredArgsConstructor with private final fields for constructor injection.\"; fi; fi; exit 0'",
+            "statusMessage": "Checking injection style..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ]; then if echo \"$FILE\" | grep -qE \"(application-local\\.yaml|docker-compose\\.yaml)$\"; then echo \"WARNING: This file often has personal config (DB ports, credentials). Use backup-checkout-edit-restore pattern when committing — only stage the feature change, not personal config.\"; fi; fi; exit 0'",
+            "statusMessage": "Checking personal config file edit..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"db/migration/.*\\.sql$\"; then CONTENT=$(cat \"$FILE\" 2>/dev/null); if echo \"$CONTENT\" | grep -qiE \"(SELECT|UPDATE|DELETE)\\s\" && ! echo \"$CONTENT\" | grep -qi \"deleted\"; then echo \"WARNING: This migration has SELECT/UPDATE/DELETE but no \\\"deleted\\\" clause. Most tables use soft-delete — add AND deleted = false where appropriate.\"; fi; fi; exit 0'",
+            "statusMessage": "Checking migration soft-delete safety..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"db/migration/.*\\.sql$\"; then BASENAME=$(basename \"$FILE\"); if ! echo \"$BASENAME\" | grep -qE \"^V2_0_[0-9]{12}__[a-z0-9-]+\\.sql$\"; then echo \"WARNING: Migration filename does not match convention V2_0_YYYYMMDDHHMI__description.sql. Got: $BASENAME\"; fi; fi; exit 0'",
+            "statusMessage": "Checking migration naming..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"/dto/.*\\.java$\"; then if grep -q \"@Builder\" \"$FILE\" 2>/dev/null && ! grep -q \"@NoArgsConstructor\" \"$FILE\" 2>/dev/null; then echo \"WARNING: DTO has @Builder but no @NoArgsConstructor. Jackson deserialization requires @NoArgsConstructor.\"; fi; fi; exit 0'",
+            "statusMessage": "Checking DTO annotations..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"service/impl/.*\\.java$\"; then if grep -qE \"(PageRequest\\.(of|ofSize)\\(|Pageable\\.ofSize\\()\" \"$FILE\" 2>/dev/null; then echo \"WARNING: PageRequest.of()/ofSize() or Pageable.ofSize() found in service impl. Use PageRequestUtil.of() instead — it caps page size via setting.size.maxSizePerPage.\"; fi; fi; exit 0'",
+            "statusMessage": "Checking PageRequest usage..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"Test\\.java$\"; then if grep -q \"@ExtendWith(MockitoExtension.class)\" \"$FILE\" 2>/dev/null; then echo \"WARNING: Use @MockitoSettings(strictness = Strictness.LENIENT) instead of @ExtendWith(MockitoExtension.class). @MockitoSettings already includes the extension.\"; fi; fi; exit 0'",
+            "statusMessage": "Checking Mockito test style..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"\\.java$\" && ! echo \"$FILE\" | grep -q \"Test\\.java$\" && ! echo \"$FILE\" | grep -q \"ApplicationUtil\\.java$\"; then if grep -qE \"application\\.(getLoan|getAsset|getCalculation|getSimulation)\\(\" \"$FILE\" 2>/dev/null; then echo \"WARNING: Direct application.getLoan()/getAsset()/getCalculation()/getSimulation() detected. Use ApplicationUtil.reflectedLoan(application), reflectedAsset(), reflectedCalculation(), reflectedSimulation() instead — returns amended data when present.\"; fi; fi; exit 0'",
+            "statusMessage": "Checking reflected entity usage..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"/controller/.*\\.java$\"; then if awk \"/^@FeatureFlag/{found=1} /^public class/{if(found){print \\\"WARNING: @FeatureFlag at class level is silently ignored — FeatureInterceptor only reads method-level annotations. Move to individual endpoints.\\\"; exit 0}} END{exit 1}\" \"$FILE\" 2>/dev/null; then true; fi; fi; exit 0'",
+            "statusMessage": "Checking @FeatureFlag placement..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"Test\\.java$\"; then if grep -qE \"ErrorMessageConstant.*\\.getMessage\\(\\)|\\.getMessage\\(\\).*ErrorMessageConstant\" \"$FILE\" 2>/dev/null; then echo \"WARNING: Test uses .getMessage() with ErrorMessageConstant on same line. Use .getErrorMessage() instead — getMessage() returns String, so Enum.equals(String) is always false (silent false-positive).\"; fi; fi; exit 0'",
+            "statusMessage": "Checking BravoCommonException assertion..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ]; then if echo \"$FILE\" | grep -q \"application\\.yaml$\" && ! echo \"$FILE\" | grep -q \"application-local\"; then CONTENT=$(echo \"$TOOL_INPUT\" | jq -r \".content // .new_string // empty\" 2>/dev/null); if echo \"$CONTENT\" | grep -qE \"feat[A-Z]\"; then echo \"REMINDER: New feature flag detected in application.yaml. Also register in application-local.yaml (set true for local dev).\"; fi; elif echo \"$FILE\" | grep -q \"application-local\\.yaml$\"; then CONTENT=$(echo \"$TOOL_INPUT\" | jq -r \".content // .new_string // empty\" 2>/dev/null); if echo \"$CONTENT\" | grep -qE \"feat[A-Z]\"; then echo \"REMINDER: New feature flag detected in application-local.yaml. Also register in application.yaml (default false).\"; fi; fi; fi; exit 0'",
+            "statusMessage": "Checking feature flag dual-registration..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"service/impl/.*\\.java$\"; then if grep -q \"BravoCommonResponse\" \"$FILE\" 2>/dev/null; then echo \"WARNING: BravoCommonResponse found in service impl. Services return raw DTOs — wrapping with BravoCommonResponse.success() belongs in controllers only.\"; fi; fi; exit 0'",
+            "statusMessage": "Checking service response wrapping..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(echo \"$TOOL_INPUT\" | jq -r \".file_path // .filePath // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"/entity/.*\\.java$\"; then if grep -q \"extends BaseEntity\" \"$FILE\" 2>/dev/null && ! grep -q \"@SQLRestriction\" \"$FILE\" 2>/dev/null; then echo \"WARNING: Entity extends BaseEntity but missing @SQLRestriction(\\\"deleted=false\\\"). Queries will return soft-deleted rows.\"; fi; fi; exit 0'",
+            "statusMessage": "Checking @SQLRestriction on entity..."
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "atlassian@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": false,
+    "frontend-design@claude-plugins-official": false
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git:*)"
+    ]
+  }
+}
