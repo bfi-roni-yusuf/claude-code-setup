@@ -2,7 +2,7 @@
 
 My [Claude Code](https://claude.com/product/claude-code) agentic workflow setup for Java/Spring Boot development on [bravo-bpm-service](https://github.com/bfi-finance/bravo-bpm-service) — a Camunda BPM orchestration service at BFI Finance.
 
-This repo contains the full configuration: project instructions, custom skills, automated hooks, specialized agents, and workflow documentation. See the [Confluence post](PLACEHOLDER) for the narrative walkthrough.
+This repo contains the full configuration: project instructions, custom skills, automated hooks, specialized agents, and workflow documentation. See the [Confluence post](https://bfifinance.atlassian.net/wiki/spaces/~638eb37f77acd224b3428329/pages/2331574276) for the narrative walkthrough.
 
 ## What's Inside
 
@@ -10,7 +10,7 @@ This repo contains the full configuration: project instructions, custom skills, 
 .
 ├── CLAUDE.md                         # Project instruction file (354 lines)
 ├── settings.local.json               # Hook definitions (17 hooks)
-├── skills/                           # 20 skill definitions
+├── skills/                           # 21 skill definitions (17 custom + 3 baseline + 1 sub-skill)
 │   ├── analyze-task/SKILL.md         # Interactive requirement analysis
 │   ├── start-task/SKILL.md           # Branch creation + plan dispatch
 │   ├── create-plan/SKILL.md          # Implementation plan generation
@@ -51,7 +51,7 @@ A 10-phase development cycle from Jira ticket to merged PR:
 | 1 | `/start-task` | Branch + plan-creator agent dispatch |
 | 2 | Review plan | Approve or revise the generated plan |
 | 3 | Execute | Step-by-step implementation |
-| 4 | `/simplify` | Code quality review |
+| 4 | `/simplify` | Code quality review (built-in) |
 | 5 | `/test-branch` | REST + unit testing |
 | 6 | `/create-pr` | Draft PR generation |
 | 7 | `/review-pr` | 6+ parallel review agents |
@@ -63,7 +63,7 @@ A 10-phase development cycle from Jira ticket to merged PR:
 | Component | Count | Purpose |
 |-----------|-------|---------|
 | CLAUDE.md | 354 lines | Project conventions, architecture, testing rules |
-| Skills | 20 | Reusable slash commands for workflow phases |
+| Skills | 25 (17 custom + 3 baseline + 5 global) | Reusable slash commands for workflow phases |
 | Hooks (PreToolUse) | 6 | Block dangerous actions before they happen |
 | Hooks (PostToolUse) | 11 | Warn about convention violations after writes |
 | Agents | 4 | Autonomous specialists (planning, review, migration) |
